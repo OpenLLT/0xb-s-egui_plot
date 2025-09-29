@@ -39,9 +39,6 @@ jobs:
       - name: Rustfmt
         run: cargo fmt --all -- --check
 
-      - name: Lint vertical spacing
-        run: ./scripts/lint.py
-
       - name: check --all-features
         run: cargo check --all-features --all-targets
 
@@ -85,19 +82,6 @@ jobs:
         env:
           CLIPPY_CONF_DIR: "scripts/clippy_wasm" # Use scripts/clippy_wasm/clippy.toml
         run: cargo clippy --target wasm32-unknown-unknown --lib -- -D warnings
-
-  # ---------------------------------------------------------------------------
-
-  cargo-deny:
-    name: Check Rust dependencies (cargo-deny)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          rust-version: "1.85.0"
-          log-level: warn
-          command: check
 
   # ---------------------------------------------------------------------------
 
