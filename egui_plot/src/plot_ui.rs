@@ -17,9 +17,18 @@ pub struct PlotUi<'a> {
     pub(crate) last_auto_bounds: Vec2b,
     pub(crate) response: Response,
     pub(crate) bounds_modifications: Vec<BoundsModification>,
+
+    pub(crate) called_once: bool,
 }
 
 impl<'a> PlotUi<'a> {
+    #[inline]
+    ///  returns true if this is the first call
+    pub(crate) fn ensure_once(&mut self) -> bool {
+        let first = !self.called_once;
+        self.called_once = true;
+        first
+    }
     fn auto_color(&mut self) -> Color32 {
         let i = self.next_auto_color_idx;
         self.next_auto_color_idx += 1;

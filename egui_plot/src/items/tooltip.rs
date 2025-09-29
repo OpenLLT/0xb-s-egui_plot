@@ -46,6 +46,7 @@ use egui::{
 
 use crate::{PlotPoint, PlotUi, items::PlotGeometry};
 
+
 /// One selected  anchor per series, found inside the vertical band.
 ///
 /// Built once per frame for all participating series. Each row stores:
@@ -180,6 +181,12 @@ impl PlotUi<'_> {
         options: &TooltipOptions,
         ui_builder: impl FnOnce(&mut egui::Ui, &[HitPoint], &[PinnedPoints]),
     ) {
+        let first_time = self.ensure_once();
+        assert!(
+            first_time,
+            "show_tooltip_across_series_with(..) must be called at most once per plot per plot"
+        );
+
         let ctx = self.ctx().clone();
         let visuals = ctx.style().visuals.clone();
         let transform = *self.transform();
