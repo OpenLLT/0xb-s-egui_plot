@@ -12,6 +12,9 @@ use crate::transform::PlotBounds;
 ///
 /// Uses f64 for improved accuracy to enable plotting
 /// large values (e.g. unix time on x axis).
+#[deprecated(
+    note = "PlotPoint is deprecated. Use ColumnarSeries<'a> and Line::from_series / Line::new_xy."
+)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlotPoint {
     /// This is often something monotonically increasing, such as time, but doesn't have to be.
@@ -75,6 +78,69 @@ impl LineStyle {
 
     pub fn dotted_dense() -> Self {
         Self::Dotted { spacing: 5.0 }
+    }
+
+    pub(super) fn style_line_iter<I>(
+        &self,
+        positions: I,
+        mut stroke: PathStroke,
+        highlight: bool,
+        shapes: &mut Vec<Shape>,
+        scratch: &mut Vec<Pos2>,
+    ) where
+        I: Iterator<Item = Pos2>,
+    {
+        scratch.clear();
+        scratch.extend(positions);
+
+        let path_stroke_color = match &stroke.color {
+            ColorMode::Solid(c) => *c,
+            ColorMode::UV(cb) => cb(Rect::from_min_max(pos2(0., 0.), pos2(0., 0.)), pos2(0., 0.)),
+        };
+
+        match scratch.len() {
+            0 => {}
+            1 => {
+                let mut radius = stroke.width / 2.0;
+                if highlight {
+                    radius *= 2f32.sqrt();
+                }
+                shapes.push(Shape::circle_filled(scratch[0], radius, path_stroke_color));
+            }
+            _ => match self {
+                Self::Solid => {
+                    if highlight {
+                        stroke.width *= 2.0;
+                    }
+                    let buf = std::mem::take(scratch);
+                    shapes.push(Shape::line(buf, stroke));
+                }
+                Self::Dotted { spacing } => {
+                    let mut radius = stroke.width;
+                    if highlight {
+                        radius *= 2f32.sqrt();
+                    }
+                    shapes.extend(Shape::dotted_line(
+                        scratch,
+                        path_stroke_color,
+                        *spacing,
+                        radius,
+                    ));
+                }
+                Self::Dashed { length } => {
+                    if highlight {
+                        stroke.width *= 2.0;
+                    }
+                    let golden = (5.0_f32.sqrt() - 1.0) / 2.0;
+                    shapes.extend(Shape::dashed_line(
+                        scratch,
+                        Stroke::new(stroke.width, path_stroke_color),
+                        *length,
+                        length * golden,
+                    ));
+                }
+            },
+        }
     }
 
     pub(super) fn style_line(
@@ -175,6 +241,7 @@ pub enum PlotPoints<'a> {
     Owned(Vec<PlotPoint>),
     Generator(ExplicitGenerator<'a>),
     Borrowed(&'a [PlotPoint]),
+    ColumnsBorrowed { xs: &'a [f64], ys: &'a [f64] },
 }
 
 impl Default for PlotPoints<'_> {
@@ -217,7 +284,7 @@ impl<'a> PlotPoints<'a> {
     pub fn points(&self) -> &[PlotPoint] {
         match self {
             Self::Owned(points) => points.as_slice(),
-            Self::Generator(_) => &[],
+            Self::Generator(_) | Self::ColumnsBorrowed { .. } => &[],
             Self::Borrowed(points) => points,
         }
     }
@@ -296,7 +363,8 @@ impl<'a> PlotPoints<'a> {
     pub(crate) fn is_empty(&self) -> bool {
         match self {
             Self::Owned(points) => points.is_empty(),
-            Self::Generator(_) => false,
+            Self::Generator(_) | Self::ColumnsBorrowed { .. } => false,
+
             Self::Borrowed(points) => points.is_empty(),
         }
     }
@@ -347,6 +415,21 @@ impl<'a> PlotPoints<'a> {
                     bounds.extend_with(point);
                 }
                 bounds
+            }
+            Self::ColumnsBorrowed { xs, ys } => {
+                let mut b = PlotBounds::NOTHING;
+                let n = xs.len().min(ys.len());
+                for i in 0..n {
+                    let x = xs[i];
+                    let y = ys[i];
+                    if x.is_finite() {
+                        b.extend_with_x(x);
+                    }
+                    if y.is_finite() {
+                        b.extend_with_y(y);
+                    }
+                }
+                b
             }
         }
     }
@@ -403,6 +486,11 @@ pub enum PlotGeometry<'a> {
     // Has currently no data, as it would require copying rects or iterating a list of pointers.
     // Instead, geometry-based functions are directly implemented in the respective PlotItem impl.
     Rects,
+
+    PointsXY {
+        xs: &'a [f64],
+        ys: &'a [f64],
+    },
 }
 
 // ----------------------------------------------------------------------------
