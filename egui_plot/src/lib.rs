@@ -9,6 +9,7 @@
 //!
 #![allow(deprecated)]
 mod axis;
+mod bound;
 mod collect_events;
 mod items;
 mod legend;
@@ -29,8 +30,6 @@ use egui::{
 };
 pub use span::{HSpan, VSpan};
 
-use emath::Float as _;
-
 pub use crate::{
     axis::{Axis, AxisHints, HPlacement, Placement, VPlacement},
     items::{
@@ -44,6 +43,10 @@ pub use crate::{
     plot_ui::PlotUi,
     transform::{PlotBounds, PlotTransform},
 };
+pub use bound::Bound;
+pub use bound::EndKind;
+pub use bound::Interval;
+use emath::Float as _;
 
 use axis::AxisWidget;
 use items::{horizontal_line, rulers_color, vertical_line};
