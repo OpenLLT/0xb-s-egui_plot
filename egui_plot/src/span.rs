@@ -2,45 +2,57 @@ use std::ops::RangeInclusive;
 
 use egui::{Color32, Rect, Shape, Stroke, Ui, pos2};
 
-use crate::{PlotBounds, PlotGeometry, PlotItem, PlotItemBase, PlotPoint, PlotTransform};
+use crate::{Interval, PlotBounds, PlotGeometry, PlotItem, PlotItemBase, PlotPoint, PlotTransform};
 
 /// A horizontal shaded region y ∈ (`y_min`, `y_max`), spanning full plot width.
 /// Semi-open ends are supported by passing `None` for either side.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HSpan {
     base: PlotItemBase,
-    /// Lower Y.
-    y_min: Option<f64>,
-    /// Upper Y.
-    y_max: Option<f64>,
     /// Fill color of the band.
     fill: Color32,
     /// Optional outline stroke around the band. `None` = no outline.
     stroke: Option<Stroke>,
     /// Toggle visibility via code.
     visible: bool,
+
+    y: Interval,
 }
 
 impl HSpan {
-    /// Create a horizontal span with an optional name and optional bounds.
+    /// Create a horizontal span with an  name and optional bounds.
     /// Use `None` to make the span open-ended on that side.
     pub fn new(name: impl Into<String>, y_min: Option<f64>, y_max: Option<f64>) -> Self {
         let default = Color32::from_rgba_unmultiplied(128, 128, 128, 40);
+
+        let interval = Interval::from((y_min, y_max));
+
         Self {
             base: PlotItemBase::new(name.into()),
-            y_min,
-            y_max,
+            y: interval,
             fill: default,
             stroke: None,
             visible: true,
         }
     }
 
-    /// Set the fill color.
+    /// Set the fill color (include transparency).
     #[inline]
     pub fn color(mut self, color: impl Into<Color32>) -> Self {
         self.fill = color.into();
         self
+    }
+
+    #[inline]
+    pub fn from_interval(name: impl Into<String>, y: Interval) -> Self {
+        let default = Color32::from_rgba_unmultiplied(128, 128, 128, 40);
+        Self {
+            base: PlotItemBase::new(name.into()),
+            y,
+            fill: default,
+            stroke: None,
+            visible: true,
+        }
     }
 
     /// Optional outline stroke around the span.
@@ -50,7 +62,7 @@ impl HSpan {
         self
     }
 
-    /// Toggle visibility.
+    /// Toggle visibility (code-controlled show/hide).
     #[inline]
     pub fn visible(mut self, yes: bool) -> Self {
         self.visible = yes;
@@ -64,26 +76,13 @@ impl PlotItem for HSpan {
             return;
         }
 
-        let frame = transform.frame();
+        let (top, bottom) = self.y.to_screen_y(transform);
 
-        let map_y = |y_opt: Option<f64>, fallback_edge: f32| -> f32 {
-            match y_opt {
-                Some(y) if y.is_finite() => {
-                    transform.position_from_point(&PlotPoint::new(0.0, y)).y
-                }
-                _ => fallback_edge,
-            }
-        };
-
-        let y0 = map_y(self.y_min, frame.top());
-        let y1 = map_y(self.y_max, frame.bottom());
-
-        // If the interval collapses or is inverted, do nothing.
-        let (top, bottom) = if y0 <= y1 { (y0, y1) } else { (y1, y0) };
-        if (bottom - top).abs() <= f32::EPSILON {
+        if (bottom - top).abs() <= f32::EPSILON || self.y.is_empty() {
             return;
         }
 
+        let frame = transform.frame();
         let rect = Rect::from_min_max(pos2(frame.left(), top), pos2(frame.right(), bottom));
 
         shapes.push(Shape::rect_filled(rect, 0.0, self.fill));
@@ -110,16 +109,18 @@ impl PlotItem for HSpan {
 
     fn bounds(&self) -> PlotBounds {
         let mut b = PlotBounds::NOTHING;
-        if let Some(y0) = self.y_min {
-            if y0.is_finite() {
-                b.extend_with_y(y0);
+
+        if let Some(v) = self.y.start.value() {
+            if v.is_finite() {
+                b.extend_with_y(v);
             }
         }
-        if let Some(y1) = self.y_max {
-            if y1.is_finite() {
-                b.extend_with_y(y1);
+        if let Some(v) = self.y.end.value() {
+            if v.is_finite() {
+                b.extend_with_y(v);
             }
         }
+
         b
     }
 
