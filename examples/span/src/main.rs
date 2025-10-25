@@ -1,3 +1,4 @@
+#![allow(rustdoc::missing_crate_level_docs)]
 use eframe::egui;
 use egui::{Color32, Stroke};
 use egui_plot::{Line, Plot};
